@@ -11,12 +11,14 @@ load_dotenv()
 from ingestion import IngestionManager
 from generator import QuizGenerator
 from evaluator import AnswerEvaluator
+from topic_discovery import TopicManager
 
 class KnowvalApp:
     def __init__(self):
         self.ingestion_manager = IngestionManager()
         self.quiz_generator = QuizGenerator()
         self.evaluator = AnswerEvaluator()
+        self.topic_manager = TopicManager()
 
     def handle_ingestion(self):
         print("\n--- Step 1: Document Ingestion ---")
@@ -33,7 +35,37 @@ class KnowvalApp:
 
     def handle_quiz(self):
         print("\n--- Step 2: Quiz Generation ---")
-        topic = input("Enter the topic/skill to evaluate: ")
+        print("Select Quiz Mode:")
+        print("1. Single Shot (Random Questions from entire content)")
+        print("2. Multilevel (Chapter/Topic based)")
+        
+        mode = input("Enter choice (1 or 2): ").strip()
+        
+        topic = ""
+        if mode == "2":
+            print("Discovering topics from documents... Please wait.")
+            try:
+                topics = self.topic_manager.discover_topics()
+                print("\nAvailable Topics:")
+                for i, t in enumerate(topics):
+                    print(f"{i+1}. {t}")
+                
+                while True:
+                    try:
+                        choice_input = input("Select a topic number: ")
+                        choice = int(choice_input)
+                        if 1 <= choice <= len(topics):
+                            topic = topics[choice-1]
+                            break
+                        print("Invalid choice. Please try again.")
+                    except ValueError:
+                        print("Invalid input. Please enter a number.")
+            except Exception as e:
+                print(f"Error discovering topics: {e}. Falling back to General.")
+                topic = "General Knowledge"
+        else:
+            topic = input("Enter the topic/skill to evaluate (or press Enter for General): ") or "General Knowledge"
+            
         difficulty = input("Enter difficulty level (Easy, Medium, Hard) [Default: Medium]: ") or "Medium"
         
         print(f"Generating quiz for topic '{topic}' at '{difficulty}' level...")

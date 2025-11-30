@@ -64,6 +64,18 @@ def test_pipeline():
         print(f"Evaluator Failed: {e}")
         return
 
+    # 4. Test Topic Discovery
+    print("\n[4] Testing Topic Discovery...")
+    from topic_discovery import TopicManager
+    try:
+        topic_manager = TopicManager()
+        topics = topic_manager.discover_topics()
+        print(f"Topic Discovery Passed. Discovered {len(topics)} topics.")
+        print(f"Topics: {topics}")
+    except Exception as e:
+        print(f"Topic Discovery Failed: {e}")
+        return
+
     print("\n=== Test Pipeline Completed Successfully ===")
 
 if __name__ == "__main__":
