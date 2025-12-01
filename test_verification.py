@@ -154,6 +154,37 @@ def test_pipeline():
     except Exception as e:
         print(f"Dynamic Sizing Test Failed: {e}")
 
+    # 8. Test Conceptual Retrieval
+    print("\n[8] Testing Conceptual Retrieval...")
+    try:
+        quiz_generator = QuizGenerator()
+        topic = "Python"
+        
+        # Test Expansion
+        print(f"Testing Query Expansion for '{topic}'...")
+        expanded = quiz_generator._expand_topic(topic)
+        print(f"Expanded Query: {expanded}")
+        if expanded and expanded != topic:
+            print("Query Expansion Passed.")
+        else:
+            print("Query Expansion Failed (or returned same topic).")
+            
+        # Test Relevance
+        print(f"Testing Relevance Check...")
+        relevant_chunk = "Python is a high-level, interpreted programming language known for its readability."
+        irrelevant_chunk = "Table of Contents: 1. Introduction 2. Installation 3. Hello World"
+        
+        is_rel = quiz_generator._is_chunk_relevant(relevant_chunk, topic)
+        is_irrel = quiz_generator._is_chunk_relevant(irrelevant_chunk, topic)
+        
+        if is_rel and not is_irrel:
+            print("Relevance Check Passed.")
+        else:
+            print(f"Relevance Check Failed: Relevant={is_rel}, Irrelevant={is_irrel}")
+            
+    except Exception as e:
+        print(f"Conceptual Retrieval Test Failed: {e}")
+
     print("\n=== Test Pipeline Completed Successfully ===")
 
 if __name__ == "__main__":

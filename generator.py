@@ -80,7 +80,44 @@ class QuizGenerator:
         except Exception as e:
             print(f"Error parsing LLM response: {e}")
             return {}
+    def _expand_topic(self, topic: str) -> str:
+        """Expands the topic into a conceptual search query."""
+        llm = ChatOpenAI(model="gpt-4o", temperature=0.5)
+        prompt = PromptTemplate(
+            input_variables=["topic"],
+            template="""You are an expert educational assistant. The user wants a quiz on the topic: '{topic}'.
+            Generate a search query that lists the core concepts, principles, and key terms related to this topic.
+            The query should be a single string of keywords and phrases.
+            Output only the query."""
+        )
+        chain = prompt | llm
+        try:
+            return chain.invoke({"topic": topic}).content.strip()
+        except Exception as e:
+            print(f"Query expansion failed: {e}")
+            return topic
 
+    def _is_chunk_relevant(self, chunk: str, topic: str) -> bool:
+        """Checks if the chunk contains substantive information about the topic."""
+        llm = ChatOpenAI(model="gpt-4o", temperature=0.0)
+        prompt = PromptTemplate(
+            input_variables=["topic", "chunk"],
+            template="""You are an expert evaluator.
+            Topic: {topic}
+            Text Chunk:
+            "{chunk}"
+            Does this text chunk contain substantive information, explanations, or definitions related to the topic?
+            Answer 'YES' if it contains useful information for a quiz question.
+            Answer 'NO' if it is just a passing mention, a table of contents, a preface, or irrelevant noise.
+            Output only YES or NO."""
+        )
+        chain = prompt | llm
+        try:
+            response = chain.invoke({"topic": topic, "chunk": chunk}).content.strip().upper()
+            return "YES" in response
+        except Exception as e:
+            print(f"Relevance check failed: {e}")
+            return True
     def get_total_chunks(self) -> int:
         """Returns the total number of chunks in the vector store."""
         try:
@@ -104,20 +141,23 @@ class QuizGenerator:
                 num_chunks = 30
             print(f"Dynamic Quiz Size: {num_chunks} questions (Total Chunks: {total_chunks})")
 
-        # Fetch more chunks to allow for skipping duplicates
+        # 1. Query Expansion
+        print(f"Expanding topic '{topic}'...")
+        search_query = self._expand_topic(topic)
+        print(f"Expanded Query: {search_query}")
+
+        # Fetch more chunks to allow for skipping duplicates and irrelevant content
         # Use Max Marginal Relevance (MMR) to ensure diversity (vertical coverage)
-        # fetch_k: Number of documents to fetch to pass to MMR algorithm
-        # lambda_mult: 0.5 balances relevance and diversity
         try:
             docs = self.vector_store.max_marginal_relevance_search(
-                topic, 
-                k=num_chunks * 2, 
+                search_query, 
+                k=num_chunks * 3,  # Fetch more to allow for filtering
                 fetch_k=num_chunks * 10, 
                 lambda_mult=0.5
             )
         except Exception as e:
             print(f"MMR Search failed ({e}), falling back to similarity search.")
-            docs = self.vector_store.similarity_search(topic, k=num_chunks * 3)
+            docs = self.vector_store.similarity_search(search_query, k=num_chunks * 4)
         
         # Shuffle documents to ensure diverse content coverage
         random.shuffle(docs)
@@ -129,6 +169,11 @@ class QuizGenerator:
         for i, doc in enumerate(docs):
             if len(quiz_data) >= num_chunks:
                 break
+            
+            # 2. Relevance Filtering
+            if not self._is_chunk_relevant(doc.page_content, topic):
+                print(f"Skipping irrelevant chunk {i+1}...")
+                continue
                 
             # Chunk Deduplication (Exact Match)
             content_hash = hash(doc.page_content)
