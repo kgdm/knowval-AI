@@ -70,7 +70,8 @@ class KnowvalApp:
         
         print(f"Generating quiz for topic '{topic}' at '{difficulty}' level...")
         try:
-            quiz = self.quiz_generator.generate_quiz(topic, num_chunks=20, difficulty=difficulty)
+            # num_chunks=None triggers dynamic sizing based on document content
+            quiz = self.quiz_generator.generate_quiz(topic, num_chunks=None, difficulty=difficulty)
             if not quiz:
                 print("No questions generated. Please check your topic or documents.")
                 return None

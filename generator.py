@@ -81,13 +81,43 @@ class QuizGenerator:
             print(f"Error parsing LLM response: {e}")
             return {}
 
-    def generate_quiz(self, topic: str, num_chunks: int = 20, difficulty: str = "Medium"):
+    def get_total_chunks(self) -> int:
+        """Returns the total number of chunks in the vector store."""
+        try:
+            return self.vector_store._collection.count()
+        except Exception as e:
+            print(f"Error counting chunks: {e}")
+            return 0
+
+    def generate_quiz(self, topic: str, num_chunks: int = None, difficulty: str = "Medium"):
         """
         Generates a quiz by retrieving chunks related to the topic.
         Ensures questions are unique.
         """
+        if num_chunks is None:
+            total_chunks = self.get_total_chunks()
+            if total_chunks < 50:
+                num_chunks = 10
+            elif total_chunks < 150:
+                num_chunks = 20
+            else:
+                num_chunks = 30
+            print(f"Dynamic Quiz Size: {num_chunks} questions (Total Chunks: {total_chunks})")
+
         # Fetch more chunks to allow for skipping duplicates
-        docs = self.vector_store.similarity_search(topic, k=num_chunks * 3)
+        # Use Max Marginal Relevance (MMR) to ensure diversity (vertical coverage)
+        # fetch_k: Number of documents to fetch to pass to MMR algorithm
+        # lambda_mult: 0.5 balances relevance and diversity
+        try:
+            docs = self.vector_store.max_marginal_relevance_search(
+                topic, 
+                k=num_chunks * 2, 
+                fetch_k=num_chunks * 10, 
+                lambda_mult=0.5
+            )
+        except Exception as e:
+            print(f"MMR Search failed ({e}), falling back to similarity search.")
+            docs = self.vector_store.similarity_search(topic, k=num_chunks * 3)
         
         # Shuffle documents to ensure diverse content coverage
         random.shuffle(docs)
