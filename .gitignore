@@ -1,2 +1,12 @@
 .env
 __pycache__/*
+chroma_db/
+.venv/
+*.pyc
+*.zip
+*.tar
+*.tar.gz
+*.png
+*.jpg
+*.jpeg
+*.docx

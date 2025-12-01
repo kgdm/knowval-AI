@@ -4,9 +4,16 @@ Knowval AI is an intelligent Knowledge Evaluator Agent designed to assess a user
 
 ## Features
 
--   **RAG-based Knowledge Retrieval**: Ingests PDF and Text documents to create a knowledge base using ChromaDB.
--   **Dynamic Question Generation**: Generates multiple-choice questions (MCQs) tailored to the content.
-    -   **Smart Deduplication**: Uses fuzzy matching to ensure unique and diverse questions.
+-   **RAG-based Knowledge Retrieval**: Ingests documents to create a knowledge base using ChromaDB.
+-   **Enhanced Ingestion Support**:
+    -   **Formats**: PDF, TXT, DOCX, ZIP, TAR, TAR.GZ.
+    -   **Images**: PNG, JPG, JPEG (requires Tesseract OCR).
+-   **Multilevel Quiz Modes**:
+    -   **Single Shot**: Random questions from the entire document.
+    -   **Multilevel**: Discovers topics/chapters and generates focused quizzes.
+-   **Dynamic Question Generation**:
+    -   **Smart Deduplication**: Uses fuzzy matching and MMR (Max Marginal Relevance) for diverse, non-repetitive questions.
+    -   **Dynamic Sizing**: Automatically adjusts quiz length (10/20/30 questions) based on document size.
     -   **Difficulty Levels**: Supports Easy, Medium, and Hard difficulty settings.
 -   **Intelligent Evaluation**:
     -   **Bloom's Taxonomy**: Evaluates answers based on cognitive depth.
@@ -27,7 +34,6 @@ Knowval AI is an intelligent Knowledge Evaluator Agent designed to assess a user
     ```bash
     pip install -r requirements.txt
     ```
-
 3.  **Set up Environment Variables**:
     -   Create a `.env` file in the root directory.
     -   Add your OpenAI API Key:
@@ -43,12 +49,13 @@ Knowval AI is an intelligent Knowledge Evaluator Agent designed to assess a user
     ```
 
 2.  **Ingest Documents**:
-    -   Enter the file paths of your study materials (PDF or TXT) when prompted.
-    -   Example: `/path/to/document.pdf`
+    -   Enter the file paths of your study materials when prompted.
+    -   Supports: `.pdf`, `.txt`, `.docx`, `.zip`, `.tar`, `.png`, `.jpg`, etc.
+    -   Example: `/path/to/docs.zip` or `/path/to/notes.docx`
 
-3.  **Generate a Quiz**:
-    -   Specify the topic you want to be tested on.
-    -   Choose a difficulty level (Easy, Medium, Hard).
+3.  **Select Quiz Mode**:
+    -   **Single Shot**: For a general assessment of the entire content.
+    -   **Multilevel**: To discover topics and focus on specific chapters.
 
 4.  **Take the Quiz**:
     -   Answer the generated MCQs.
@@ -60,8 +67,9 @@ Knowval AI is an intelligent Knowledge Evaluator Agent designed to assess a user
 ## Project Structure
 
 -   `main.py`: Entry point for the interactive chatbot loop.
--   `ingestion.py`: Handles document loading, chunking, and vector storage.
--   `generator.py`: Generates unique questions and keywords using LLMs.
+-   `ingestion.py`: Handles document loading (including archives/images), chunking, and vector storage.
+-   `generator.py`: Generates unique questions using LLMs with MMR search and dynamic sizing.
+-   `topic_discovery.py`: Identifies topics for Multilevel quizzes.
 -   `evaluator.py`: Evaluates user answers and provides feedback.
 -   `test_verification.py`: Automated script to verify the pipeline.
 
@@ -71,3 +79,4 @@ Knowval AI is an intelligent Knowledge Evaluator Agent designed to assess a user
 -   **LangChain**: For orchestration and RAG flows.
 -   **ChromaDB**: Vector database for document storage.
 -   **OpenAI GPT-4o**: LLM for generation and evaluation.
+-   **Tesseract OCR**: For extracting text from images.
