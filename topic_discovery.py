@@ -16,13 +16,19 @@ class TopicManager:
         self.embeddings = OpenAIEmbeddings()
         self.vector_store = Chroma(persist_directory=self.persist_directory, embedding_function=self.embeddings)
 
-    def discover_topics(self) -> List[str]:
+    def discover_topics(self, username: str = None) -> List[str]:
         """
         Analyzes the documents to discover main topics or chapters.
         """
         # Retrieve chunks that might contain structural info
         # We search for terms likely to appear in introductions or table of contents
-        docs = self.vector_store.similarity_search("Table of Contents, Chapters, Overview, Syllabus, Introduction", k=15)
+        filter_dict = {"user_id": username} if username else None
+        
+        docs = self.vector_store.similarity_search(
+            "Table of Contents, Chapters, Overview, Syllabus, Introduction", 
+            k=15,
+            filter=filter_dict
+        )
         
         if not docs:
             return ["General Knowledge"]

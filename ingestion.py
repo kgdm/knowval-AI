@@ -96,14 +96,19 @@ class IngestionManager:
         )
         return text_splitter.split_documents(documents)
 
-    def store_in_vector_db(self, chunks: List[Document]):
-        """Stores chunks in ChromaDB."""
+    def store_in_vector_db(self, chunks: List[Document], username: str = None):
+        """Stores chunks in ChromaDB with user metadata."""
         if not chunks:
             print("No chunks to store.")
             return None
             
         if not os.getenv("OPENAI_API_KEY"):
             raise ValueError("OPENAI_API_KEY environment variable is not set")
+
+        # Add user_id to metadata if username is provided
+        if username:
+            for chunk in chunks:
+                chunk.metadata['user_id'] = username
 
         vector_store = Chroma.from_documents(
             documents=chunks,
@@ -112,7 +117,7 @@ class IngestionManager:
         )
         return vector_store
 
-    def ingest_files(self, file_paths: List[str]):
+    def ingest_files(self, file_paths: List[str], username: str = None):
         """Orchestrates the ingestion process."""
         print(f"Loading files: {file_paths}")
         docs = self.load_documents(file_paths)
@@ -121,6 +126,6 @@ class IngestionManager:
         chunks = self.split_documents(docs)
         print(f"Split into {len(chunks)} chunks")
         
-        vector_store = self.store_in_vector_db(chunks)
+        vector_store = self.store_in_vector_db(chunks, username)
         print("Stored in Vector DB")
         return vector_store

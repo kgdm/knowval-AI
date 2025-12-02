@@ -43,7 +43,7 @@ def login_page():
     tab1, tab2 = st.tabs(["Login", "Register"])
     
     with tab1:
-        username = st.text_input("Username", key="login_user")
+        username = st.text_input("Email", key="login_user")
         password = st.text_input("Password", type="password", key="login_pass")
         if st.button("Login"):
             if auth_manager.login_user(username, password):
@@ -53,15 +53,27 @@ def login_page():
                 st.rerun()
             else:
                 st.error("Invalid credentials")
-                
+        
+        st.markdown("---")
+        if st.button("Login with Google"):
+            auth_url, error = auth_manager.google_login()
+            if auth_url:
+                st.link_button("Continue to Google", auth_url)
+            else:
+                st.error(f"Google Login Error: {error}")
+                st.info("Ensure 'client_secret.json' is in the root directory.")
+
     with tab2:
-        new_user = st.text_input("Username", key="reg_user")
+        new_user = st.text_input("Email", key="reg_user")
         new_pass = st.text_input("Password", type="password", key="reg_pass")
         if st.button("Register"):
-            if auth_manager.register_user(new_user, new_pass):
+            result = auth_manager.register_user(new_user, new_pass)
+            if result is True:
                 st.success("Registration successful! Please login.")
+            elif isinstance(result, str):
+                st.error(result)
             else:
-                st.error("Username already exists")
+                st.error("Registration failed.")
 
 def dashboard_page():
     st.title(f"Welcome, {st.session_state['username']}!")
@@ -87,7 +99,7 @@ def dashboard_page():
                         f.write(uploaded_file.getbuffer())
                     file_paths.append(path)
                 
-                ingestion_manager.ingest_files(file_paths)
+                ingestion_manager.ingest_files(file_paths, username=st.session_state['username'])
                 st.success("Ingestion successful!")
         else:
             st.warning("Please upload files first.")
@@ -100,7 +112,7 @@ def dashboard_page():
     if mode == "Multilevel":
         if st.button("Discover Topics"):
             with st.spinner("Discovering topics..."):
-                topics = topic_manager.discover_topics()
+                topics = topic_manager.discover_topics(username=st.session_state['username'])
                 st.session_state['discovered_topics'] = topics
         
         if 'discovered_topics' in st.session_state:
@@ -113,7 +125,7 @@ def dashboard_page():
     if st.button("Start Quiz"):
         with st.spinner("Generating Quiz..."):
             # Pass num_chunks=None for dynamic sizing
-            quiz = quiz_generator.generate_quiz(topic, num_chunks=None, difficulty=difficulty)
+            quiz = quiz_generator.generate_quiz(topic, num_chunks=None, difficulty=difficulty, username=st.session_state['username'])
             if quiz:
                 st.session_state['quiz_data'] = quiz
                 st.session_state['current_question_index'] = 0

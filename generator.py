@@ -126,10 +126,10 @@ class QuizGenerator:
             print(f"Error counting chunks: {e}")
             return 0
 
-    def generate_quiz(self, topic: str, num_chunks: int = None, difficulty: str = "Medium"):
+    def generate_quiz(self, topic: str, num_chunks: int = None, difficulty: str = "Medium", username: str = None):
         """
         Generates a quiz by retrieving chunks related to the topic.
-        Ensures questions are unique.
+        Ensures questions are unique and filtered by user.
         """
         if num_chunks is None:
             total_chunks = self.get_total_chunks()
@@ -146,6 +146,9 @@ class QuizGenerator:
         search_query = self._expand_topic(topic)
         print(f"Expanded Query: {search_query}")
 
+        # Prepare filter
+        filter_dict = {"user_id": username} if username else None
+
         # Fetch more chunks to allow for skipping duplicates and irrelevant content
         # Use Max Marginal Relevance (MMR) to ensure diversity (vertical coverage)
         try:
@@ -153,11 +156,12 @@ class QuizGenerator:
                 search_query, 
                 k=num_chunks * 3,  # Fetch more to allow for filtering
                 fetch_k=num_chunks * 10, 
-                lambda_mult=0.5
+                lambda_mult=0.5,
+                filter=filter_dict
             )
         except Exception as e:
             print(f"MMR Search failed ({e}), falling back to similarity search.")
-            docs = self.vector_store.similarity_search(search_query, k=num_chunks * 4)
+            docs = self.vector_store.similarity_search(search_query, k=num_chunks * 4, filter=filter_dict)
         
         # Shuffle documents to ensure diverse content coverage
         random.shuffle(docs)

@@ -11,3 +11,7 @@ pysqlite3-binary
 docx2txt
 tesseract
 streamlit
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+dnspython

@@ -64,6 +64,17 @@ Knowval AI is an intelligent Knowledge Evaluator Agent designed to assess a user
 5.  **Review**:
     -   Get a comprehensive report at the end of the session.
 
+## Deployment
+
+### Streamlit Community Cloud (Recommended)
+1.  Push this repository to GitHub.
+2.  Go to [Streamlit Community Cloud](https://streamlit.io/cloud).
+3.  Connect your GitHub account and select this repository.
+4.  Set the **Main file path** to `app.py`.
+5.  **Advanced Settings**:
+    -   Add your `OPENAI_API_KEY` in the "Secrets" section.
+    -   *Note*: The repository includes `packages.txt` to automatically install Tesseract OCR.
+
 ## Project Structure
 
 -   `main.py`: Entry point for the interactive chatbot loop.
