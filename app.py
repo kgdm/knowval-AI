@@ -6,9 +6,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import streamlit as st
+import extra_streamlit_components as stx
 import os
 import tempfile
 import uuid
+import datetime
 from auth import AuthManager
 from ingestion import IngestionManager
 from generator import QuizGenerator
@@ -25,9 +27,28 @@ evaluator = AnswerEvaluator()
 topic_manager = TopicManager()
 session_manager = SessionManager()
 
+# Initialize Cookie Manager
+cookie_manager = stx.CookieManager()
+
 # Session State Initialization
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
+    
+# Check for auth cookie (Auto-login)
+if not st.session_state['logged_in']:
+    try:
+        auth_token = cookie_manager.get(cookie="auth_token")
+        if auth_token:
+            st.session_state['logged_in'] = True
+            st.session_state['username'] = auth_token
+            st.session_state['page'] = "dashboard"
+            # No rerun here to avoid infinite loops if cookie reading is delayed, 
+            # but usually rerun is needed to update UI. 
+            # Let's rely on the main logic flow or force a rerun if needed.
+            st.rerun()
+    except Exception as e:
+        print(f"Cookie read error: {e}")
+
 if 'username' not in st.session_state:
     st.session_state['username'] = ""
 if 'page' not in st.session_state:
@@ -56,9 +77,11 @@ def login_page():
                 st.session_state['logged_in'] = True
                 st.session_state['username'] = username
                 st.session_state['page'] = "dashboard"
+                # Set cookie (expires in 30 days)
+                cookie_manager.set("auth_token", username, expires_at=datetime.datetime.now() + datetime.timedelta(days=30))
                 st.rerun()
             else:
-                st.error("Invalid credentials")
+                st.error("Invalid username or password")
         
         st.markdown("---")
         if st.button("Login with Google"):
@@ -154,6 +177,8 @@ def dashboard_page():
         st.session_state['logged_in'] = False
         st.session_state['page'] = "login"
         st.session_state['current_session_id'] = None
+        # Delete cookie
+        cookie_manager.delete("auth_token")
         st.rerun()
         
     st.header("1. Upload Documents")
