@@ -24,62 +24,74 @@ class QuizGenerator:
     def get_retriever(self):
         return self.vector_store.as_retriever()
 
-    def generate_question(self, chunk: str, difficulty: str) -> Dict[str, Any]:
+    def generate_batch_questions(self, chunks: List[str], topic: str, difficulty: str) -> List[Dict[str, Any]]:
         """
-        Generates a single MCQ question and keywords for a given chunk and difficulty.
+        Generates MCQs for a batch of chunks.
         """
         llm = ChatOpenAI(model="gpt-4o", temperature=0.7)
         
         prompt_template = """
         You are Knowval AI, an expert Knowledge Evaluator.
-        Your task is to generate exactly 1 {difficulty} level multiple-choice question (MCQ) based on the following text chunk.
+        Your task is to generate 1 {difficulty} level multiple-choice question (MCQ) for EACH of the provided text chunks.
         
-        CRITICAL GUIDELINES FOR QUESTION GENERATION:
-        1. **Conceptual Focus**: The question MUST test the user's understanding of the *concepts*, *principles*, or *mechanisms* discussed in the text.
-        2. **Avoid Trivial Details**: DO NOT ask about specific dates, minor names, specific book titles mentioned in passing, or "what does the text say about X".
-        3. **Generalizability**: The question should be answerable by someone who knows the subject well, even if they haven't read this specific text chunk. The text chunk is just the source of truth.
-        4. **No "According to the text"**: Avoid phrasing like "According to the passage..." or "In this text...". Make it a general subject question.
-        5. **Distractors**: Ensure the wrong options (distractors) are plausible but clearly incorrect to a knowledgeable person.
-        6. **Noise**: Avoid any noise or irrelevant information in the question. 
-        7. **Silliness**: Avoid any silly or illogical questions like context about the book or author or documentation team whatsoever. instead only focus on the core contents of the data and the topics.
+        Topic: {topic}
         
-        Text Chunk:
-        "{chunk}"
+        CRITICAL GUIDELINES:
+        1. **One Question Per Chunk**: Generate exactly one question for each chunk provided below.
+        2. **Relevance Check**: If a chunk is NOT substantively relevant to the Topic or is just noise/preface, return null for that chunk.
+        3. **Conceptual Focus**: The question MUST test the user's understanding of the *concepts*, *principles*, or *mechanisms* discussed in the text.
+        4. **Avoid Trivial Details**: DO NOT ask about specific dates, minor names, specific book titles mentioned in passing, or "what does the text say about X".
+        5. **Generalizability**: The question should be answerable by someone who knows the subject well, even if they haven't read this specific text chunk. The text chunk is just the source of truth.
+        6. **No "According to the text"**: Avoid phrasing like "According to the passage..." or "In this text...". Make it a general subject question.
+        7. **Distractors**: Ensure the wrong options (distractors) are plausible but clearly incorrect to a knowledgeable person.
+        8. **Noise**: Avoid any noise or irrelevant information in the question. 
+        9. **Silliness**: Avoid any silly or illogical questions like context about the book or author or documentation team whatsoever. instead only focus on the core contents of the data and the topics.
+        10. **Output Format**: Return a JSON LIST of objects.
         
-        Output Format (JSON):
-        {{
-            "question": "The question text here?",
-            "options": {{
-                "A": "Option A text",
-                "B": "Option B text",
-                "C": "Option C text",
-                "D": "Option D text"
+        Input Chunks:
+        {formatted_chunks}
+        
+        Output Format (JSON List):
+        [
+            {{
+                "chunk_index": 0,
+                "question": "Question text...",
+                "options": {{"A": "...", "B": "...", "C": "...", "D": "..."}},
+                "correct_answer": "A",
+                "explanation": "...",
+                "keywords": ["..."]
             }},
-            "correct_answer": "A",
-            "explanation": "Explanation here.",
-            "keywords": ["keyword1", "keyword2", "keyword3"]
-        }}
+            ...
+        ]
         """
         
+        formatted_chunks = "\n\n".join([f"--- CHUNK {i} ---\n{chunk}" for i, chunk in enumerate(chunks)])
+        
         prompt = PromptTemplate(
-            input_variables=["difficulty", "chunk"],
+            input_variables=["difficulty", "topic", "formatted_chunks"],
             template=prompt_template
         )
         
         chain = prompt | llm
-        response = chain.invoke({
-            "difficulty": difficulty,
-            "chunk": chunk
-        })
-        
         try:
+            response = chain.invoke({
+                "difficulty": difficulty,
+                "topic": topic,
+                "formatted_chunks": formatted_chunks
+            })
+            
             content = response.content.strip()
             if content.startswith("```json"):
                 content = content.replace("```json", "").replace("```", "")
-            return json.loads(content)
+            
+            parsed = json.loads(content)
+            if isinstance(parsed, list):
+                return parsed
+            return []
         except Exception as e:
-            print(f"Error parsing LLM response: {e}")
-            return {}
+            print(f"Error parsing batch LLM response: {e}")
+            return []
+
     def _expand_topic(self, topic: str) -> str:
         """Expands the topic into a conceptual search query."""
         llm = ChatOpenAI(model="gpt-4o", temperature=0.5)
@@ -99,6 +111,8 @@ class QuizGenerator:
 
     def _is_chunk_relevant(self, chunk: str, topic: str) -> bool:
         """Checks if the chunk contains substantive information about the topic."""
+        # NOTE: This method is kept for backward compatibility or individual checks if needed,
+        # but batch generation now handles relevance internally.
         llm = ChatOpenAI(model="gpt-4o", temperature=0.0)
         prompt = PromptTemplate(
             input_variables=["topic", "chunk"],
@@ -118,6 +132,7 @@ class QuizGenerator:
         except Exception as e:
             print(f"Relevance check failed: {e}")
             return True
+
     def get_total_chunks(self, username: str = None, session_id: str = None) -> int:
         """Returns the total number of chunks in the vector store, filtered by user/session."""
         try:
@@ -148,7 +163,7 @@ class QuizGenerator:
     def generate_quiz(self, topic: str, num_chunks: int = None, difficulty: str = "Medium", username: str = None, session_id: str = None):
         """
         Generates a quiz by retrieving chunks related to the topic.
-        Ensures questions are unique and filtered by user and session.
+        Uses batch processing for speed.
         """
         if num_chunks is None:
             total_chunks = self.get_total_chunks(username, session_id)
@@ -179,92 +194,108 @@ class QuizGenerator:
         else:
             filter_dict = None
 
-        # Fetch more chunks to allow for skipping duplicates and irrelevant content
-        # Use Max Marginal Relevance (MMR) to ensure diversity (vertical coverage)
+        # Fetch more chunks to allow for filtering
         try:
             docs = self.vector_store.max_marginal_relevance_search(
                 search_query, 
-                k=num_chunks * 3,  # Fetch more to allow for filtering
-                fetch_k=num_chunks * 10, 
+                k=num_chunks * 2,
+                fetch_k=num_chunks * 5, 
                 lambda_mult=0.5,
                 filter=filter_dict
             )
         except Exception as e:
             print(f"MMR Search failed ({e}), falling back to similarity search.")
-            docs = self.vector_store.similarity_search(search_query, k=num_chunks * 4, filter=filter_dict)
+            docs = self.vector_store.similarity_search(search_query, k=num_chunks * 2, filter=filter_dict)
         
-        # Shuffle documents to ensure diverse content coverage
+        # Shuffle documents
         random.shuffle(docs)
         
         quiz_data = []
         seen_questions = []
         seen_chunk_contents = set()
         
-        for i, doc in enumerate(docs):
+        # Process in batches of 5
+        batch_size = 5
+        
+        # Filter duplicates first
+        unique_docs = []
+        for doc in docs:
+            content_hash = hash(doc.page_content)
+            if content_hash not in seen_chunk_contents:
+                seen_chunk_contents.add(content_hash)
+                unique_docs.append(doc)
+                
+        for i in range(0, len(unique_docs), batch_size):
             if len(quiz_data) >= num_chunks:
                 break
-            
-            # 2. Relevance Filtering
-            if not self._is_chunk_relevant(doc.page_content, topic):
-                print(f"Skipping irrelevant chunk {i+1}...")
-                continue
                 
-            # Chunk Deduplication (Exact Match)
-            content_hash = hash(doc.page_content)
-            if content_hash in seen_chunk_contents:
-                continue
-            seen_chunk_contents.add(content_hash)
-                
-            print(f"Processing chunk {len(quiz_data)+1}...")
-            result = self.generate_question(doc.page_content, difficulty)
+            batch_docs = unique_docs[i:i+batch_size]
+            batch_chunks = [doc.page_content for doc in batch_docs]
             
-            question_text = result.get("question")
+            print(f"Processing batch {i//batch_size + 1} ({len(batch_chunks)} chunks)...")
             
-            if not question_text:
-                continue
-                
-            # Question Deduplication (Fuzzy Match)
-            is_duplicate = False
-            for seen_q in seen_questions:
-                if SequenceMatcher(None, question_text, seen_q).ratio() > 0.85:
-                    is_duplicate = True
-                    print(f"Skipping similar question: {question_text[:50]}...")
+            results = self.generate_batch_questions(batch_chunks, topic, difficulty)
+            
+            for res in results:
+                if len(quiz_data) >= num_chunks:
                     break
-            
-            if is_duplicate:
-                continue
+                    
+                if not res or not res.get("question"):
+                    continue
                 
-            seen_questions.append(question_text)
-            
-            # Shuffle options to ensure randomness
-            options_dict = result.get("options", {})
-            correct_option_key = result.get("correct_answer")
-            correct_option_text = options_dict.get(correct_option_key)
-            
-            # Create a list of (key, value) pairs and shuffle them
-            items = list(options_dict.values())
-            random.shuffle(items)
-            
-            # Reassign keys A, B, C, D
-            new_options = {}
-            new_correct_key = ""
-            keys = ["A", "B", "C", "D"]
-            
-            for idx, text in enumerate(items):
-                if idx < len(keys):
-                    key = keys[idx]
-                    new_options[key] = text
-                    if text == correct_option_text:
-                        new_correct_key = key
-            
-            quiz_data.append({
-                "chunk_id": len(quiz_data) + 1,
-                "chunk_content": doc.page_content,
-                "question": question_text,
-                "options": new_options,
-                "correct_answer": new_correct_key,
-                "explanation": result.get("explanation"),
-                "keywords": result.get("keywords", [])
-            })
+                # Extra safety check for string "null" or "None"
+                q_text = str(res.get("question")).strip().lower()
+                if q_text in ["null", "none", ""]:
+                    continue
+                    
+                question_text = res.get("question")
+                
+                # Question Deduplication
+                is_duplicate = False
+                for seen_q in seen_questions:
+                    if SequenceMatcher(None, question_text, seen_q).ratio() > 0.85:
+                        is_duplicate = True
+                        break
+                
+                if is_duplicate:
+                    continue
+                    
+                seen_questions.append(question_text)
+                
+                # Shuffle options
+                options_dict = res.get("options", {})
+                correct_option_key = res.get("correct_answer")
+                correct_option_text = options_dict.get(correct_option_key)
+                
+                items = list(options_dict.values())
+                random.shuffle(items)
+                
+                new_options = {}
+                new_correct_key = ""
+                keys = ["A", "B", "C", "D"]
+                
+                for idx, text in enumerate(items):
+                    if idx < len(keys):
+                        key = keys[idx]
+                        new_options[key] = text
+                        if text == correct_option_text:
+                            new_correct_key = key
+                
+                # Find original doc content (approximate mapping by index if needed, but here we just use the chunk content from result or map back)
+                # Since we passed a list, we can map back by index if the LLM respects it.
+                # The prompt asks for "chunk_index".
+                chunk_idx = res.get("chunk_index", 0)
+                if 0 <= chunk_idx < len(batch_docs):
+                    original_doc = batch_docs[chunk_idx]
+                    
+                    quiz_data.append({
+                        "chunk_id": len(quiz_data) + 1,
+                        "chunk_content": original_doc.page_content,
+                        "question": question_text,
+                        "options": new_options,
+                        "correct_answer": new_correct_key,
+                        "explanation": res.get("explanation"),
+                        "keywords": res.get("keywords", [])
+                    })
             
         return quiz_data

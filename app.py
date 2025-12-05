@@ -184,10 +184,17 @@ def dashboard_page():
     st.header("1. Upload Documents")
     uploaded_files = st.file_uploader("Upload PDF, TXT, DOCX, ZIP", accept_multiple_files=True)
     
-    if st.button("Ingest Files"):
-        if uploaded_files:
+    # Auto-Ingestion Logic
+    if uploaded_files:
+        # Check if files are new
+        current_file_names = {f.name for f in uploaded_files}
+        last_file_names = st.session_state.get('last_uploaded_files', set())
+        
+        if current_file_names != last_file_names:
+            st.session_state['last_uploaded_files'] = current_file_names
+            
             file_paths = []
-            with st.spinner("Ingesting documents..."):
+            with st.spinner("Auto-ingesting documents..."):
                 # Save uploaded files to temp directory
                 temp_dir = tempfile.mkdtemp()
                 for uploaded_file in uploaded_files:
@@ -213,8 +220,6 @@ def dashboard_page():
                 )
                 st.success("Ingestion successful!")
                 st.rerun() # Rerun to update session list name
-        else:
-            st.warning("Please upload files first.")
 
     st.header("2. Quiz Configuration")
     
