@@ -9,7 +9,7 @@ openai
 tiktoken
 pysqlite3-binary
 docx2txt
-tesseract
+pytesseract
 streamlit
 google-auth
 google-auth-oauthlib

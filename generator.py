@@ -118,21 +118,40 @@ class QuizGenerator:
         except Exception as e:
             print(f"Relevance check failed: {e}")
             return True
-    def get_total_chunks(self) -> int:
-        """Returns the total number of chunks in the vector store."""
+    def get_total_chunks(self, username: str = None, session_id: str = None) -> int:
+        """Returns the total number of chunks in the vector store, filtered by user/session."""
         try:
-            return self.vector_store._collection.count()
+            # Prepare filter
+            filters = []
+            if username:
+                filters.append({"user_id": username})
+            if session_id:
+                filters.append({"session_id": session_id})
+            
+            if len(filters) > 1:
+                filter_dict = {"$and": filters}
+            elif len(filters) == 1:
+                filter_dict = filters[0]
+            else:
+                filter_dict = None
+
+            # Chroma's count() doesn't support filter in all versions, but get() does.
+            # Using get(where=...) to count.
+            if filter_dict:
+                return len(self.vector_store.get(where=filter_dict)['ids'])
+            else:
+                return self.vector_store._collection.count()
         except Exception as e:
             print(f"Error counting chunks: {e}")
             return 0
 
-    def generate_quiz(self, topic: str, num_chunks: int = None, difficulty: str = "Medium", username: str = None):
+    def generate_quiz(self, topic: str, num_chunks: int = None, difficulty: str = "Medium", username: str = None, session_id: str = None):
         """
         Generates a quiz by retrieving chunks related to the topic.
-        Ensures questions are unique and filtered by user.
+        Ensures questions are unique and filtered by user and session.
         """
         if num_chunks is None:
-            total_chunks = self.get_total_chunks()
+            total_chunks = self.get_total_chunks(username, session_id)
             if total_chunks < 50:
                 num_chunks = 10
             elif total_chunks < 150:
@@ -147,7 +166,18 @@ class QuizGenerator:
         print(f"Expanded Query: {search_query}")
 
         # Prepare filter
-        filter_dict = {"user_id": username} if username else None
+        filters = []
+        if username:
+            filters.append({"user_id": username})
+        if session_id:
+            filters.append({"session_id": session_id})
+        
+        if len(filters) > 1:
+            filter_dict = {"$and": filters}
+        elif len(filters) == 1:
+            filter_dict = filters[0]
+        else:
+            filter_dict = None
 
         # Fetch more chunks to allow for skipping duplicates and irrelevant content
         # Use Max Marginal Relevance (MMR) to ensure diversity (vertical coverage)
