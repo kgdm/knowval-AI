@@ -65,7 +65,7 @@ if 'current_session_id' not in st.session_state:
     st.session_state['current_session_id'] = None
 
 def login_page():
-    st.title("Knowval AI - Login")
+    st.title("Knowval AI - Knowledge evaluator Application using RAG")
     
     tab1, tab2 = st.tabs(["Login", "Register"])
     
