@@ -42,6 +42,9 @@ class AuthManager:
 
     def register_user(self, username, password):
         """Register a new user with email validation."""
+        # Normalize username
+        username = username.strip().lower()
+        
         is_valid, msg = self._validate_email(username)
         if not is_valid:
             print(msg)
@@ -63,6 +66,9 @@ class AuthManager:
 
     def login_user(self, username, password):
         """Verify user credentials."""
+        # Normalize username
+        username = username.strip().lower()
+        
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         hashed_pw = self._hash_password(password)
